@@ -33,244 +33,131 @@ ENTITY CU is
 END ENTITY CU;
 
 ARCHITECTURE RTL OF CU IS
-  -- Instruction opcodes
-  CONSTANT NOP    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "00000";
-  CONSTANT HLT    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "00001";
-  CONSTANT SETC   : STD_LOGIC_VECTOR(4 DOWNTO 0) := "00010";
-  CONSTANT NOT_OP : STD_LOGIC_VECTOR(4 DOWNTO 0) := "00011";
-  CONSTANT INC_OP : STD_LOGIC_VECTOR(4 DOWNTO 0) := "00100";
-  CONSTANT MOV    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "00101";
-  CONSTANT ADD    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "00110";
-  CONSTANT SUB    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "00111";
-  CONSTANT AND_OP : STD_LOGIC_VECTOR(4 DOWNTO 0) := "01000";
-  CONSTANT IADD   : STD_LOGIC_VECTOR(4 DOWNTO 0) := "01001";
-  CONSTANT LDM    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "01010";
-  CONSTANT LDD    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "01011";
-  CONSTANT STD    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "01100";
-  CONSTANT PUSH   : STD_LOGIC_VECTOR(4 DOWNTO 0) := "01101";
-  CONSTANT POP    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "01110";
-  CONSTANT JZ     : STD_LOGIC_VECTOR(4 DOWNTO 0) := "01111";
-  CONSTANT JN     : STD_LOGIC_VECTOR(4 DOWNTO 0) := "10000";
-  CONSTANT JMP    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "10001";
-  CONSTANT CALL   : STD_LOGIC_VECTOR(4 DOWNTO 0) := "10010";
-  CONSTANT RET    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "10011";
-  CONSTANT RTI    : STD_LOGIC_VECTOR(4 DOWNTO 0) := "10100";
-  CONSTANT INT_OP : STD_LOGIC_VECTOR(4 DOWNTO 0) := "10101";
+  -- Instruction Group Signals (Bit-based classification)
+  SIGNAL is_group_00xxx   : STD_LOGIC; -- 00XXX: One operand/control instructions
+  SIGNAL is_group_01xxx   : STD_LOGIC; -- 01XXX: Memory and Stack operations
+  SIGNAL is_group_10xxx   : STD_LOGIC; -- 10XXX: Branch/Jump/Interrupt operations
+  SIGNAL is_group_11xxx   : STD_LOGIC; -- 11XXX: Reserved/Branch operations
+  
+  -- Subgroup decoders
+  SIGNAL is_alu_op        : STD_LOGIC; -- 00011 to 01000 (NOT, INC, MOV, ADD, SUB, AND)
+  SIGNAL is_imm_op        : STD_LOGIC; -- 01001, 01010 (IADD, LDM)
+  SIGNAL is_mem_op        : STD_LOGIC; -- 01011, 01100 (LDD, STD)
+  SIGNAL is_stack_op      : STD_LOGIC; -- 01101, 01110 (PUSH, POP)
+  SIGNAL is_branch_op     : STD_LOGIC; -- 01111 to 10001 (JZ, JN, JMP)
+  SIGNAL is_call_ret      : STD_LOGIC; -- 10010 to 10100 (CALL, RET, RTI)
+  
+  -- Specific instruction decoders
+  SIGNAL is_halt          : STD_LOGIC; -- 00001
+  SIGNAL is_setc          : STD_LOGIC; -- 00010
+  SIGNAL is_not           : STD_LOGIC; -- 00011
+  SIGNAL is_inc           : STD_LOGIC; -- 00100
+  SIGNAL is_mov           : STD_LOGIC; -- 00101
+  SIGNAL is_iadd          : STD_LOGIC; -- 01001
+  SIGNAL is_ldm           : STD_LOGIC; -- 01010
+  SIGNAL is_ldd           : STD_LOGIC; -- 01011
+  SIGNAL is_std           : STD_LOGIC; -- 01100
+  SIGNAL is_push          : STD_LOGIC; -- 01101
+  SIGNAL is_pop           : STD_LOGIC; -- 01110
+  SIGNAL is_jz            : STD_LOGIC; -- 01111
+  SIGNAL is_jn            : STD_LOGIC; -- 10000
+  SIGNAL is_jmp           : STD_LOGIC; -- 10001
+  SIGNAL is_call          : STD_LOGIC; -- 10010
+  SIGNAL is_ret           : STD_LOGIC; -- 10011
+  SIGNAL is_rti           : STD_LOGIC; -- 10100
+  SIGNAL is_int           : STD_LOGIC; -- 10101
 
 BEGIN
 
-  -- Combinational Control Logic
-  PROCESS (OP_CODE, INT)
-  BEGIN
-    -- Default values (prevent latches)
-    RD_NXT_INST <= '1';
-    RD_EN <= '1';
-    ALU_SRC <= "00";
-    ALU_OP <= "000";
-    SET_CARRY <= '0';
-    BRANCH <= '0';
-    BRANCH_T <= "00";
-    PC_WE <= '0';
-    OUT_EN <= '0';
-    IMM_SIG <= '0';
-    SP_OP <= "00";
-    PC_SEL <= '0';
-    MEM_WRT_EN <= '0';
-    MEM_ADDR <= "00";
-    MEM_WRT_DATA <= "00";
-    WB_DATA <= "00";
-    WB_ADDR <= "00";
-    REG_WRT_EN <= '0';
-    SWAP_SIG <= '0';
+  -- =================== INSTRUCTION GROUPING ===================
+  -- Group by upper bits for efficient decoding
+  is_group_00xxx <= NOT OP_CODE(4) AND NOT OP_CODE(3);
+  is_group_01xxx <= NOT OP_CODE(4) AND OP_CODE(3);
+  is_group_10xxx <= OP_CODE(4) AND NOT OP_CODE(3);
+  is_group_11xxx <= OP_CODE(4) AND OP_CODE(3);
 
-    CASE OP_CODE IS
-      -- NOP: No Operation
-      WHEN NOP =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
+  -- Subgroup classifications
+  is_alu_op     <= is_group_00xxx AND (OP_CODE(2) OR OP_CODE(1) OR OP_CODE(0)); -- 00011-00111 + 01000
+  is_imm_op     <= (OP_CODE = "01001") OR (OP_CODE = "01010");
+  is_mem_op     <= (OP_CODE = "01011") OR (OP_CODE = "01100");
+  is_stack_op   <= (OP_CODE = "01101") OR (OP_CODE = "01110");
+  is_branch_op  <= (OP_CODE = "01111") OR (OP_CODE = "10000") OR (OP_CODE = "10001");
+  is_call_ret   <= (OP_CODE = "10010") OR (OP_CODE = "10011") OR (OP_CODE = "10100");
 
-      -- HLT: Halt
-      WHEN HLT =>
-        RD_NXT_INST <= '0';
-        RD_EN <= '0';
+  -- Specific instruction identification
+  is_halt  <= '1' WHEN OP_CODE = "00001" ELSE '0';
+  is_setc  <= '1' WHEN OP_CODE = "00010" ELSE '0';
+  is_not   <= '1' WHEN OP_CODE = "00011" ELSE '0';
+  is_inc   <= '1' WHEN OP_CODE = "00100" ELSE '0';
+  is_mov   <= '1' WHEN OP_CODE = "00101" ELSE '0';
+  is_iadd  <= '1' WHEN OP_CODE = "01001" ELSE '0';
+  is_ldm   <= '1' WHEN OP_CODE = "01010" ELSE '0';
+  is_ldd   <= '1' WHEN OP_CODE = "01011" ELSE '0';
+  is_std   <= '1' WHEN OP_CODE = "01100" ELSE '0';
+  is_push  <= '1' WHEN OP_CODE = "01101" ELSE '0';
+  is_pop   <= '1' WHEN OP_CODE = "01110" ELSE '0';
+  is_jz    <= '1' WHEN OP_CODE = "01111" ELSE '0';
+  is_jn    <= '1' WHEN OP_CODE = "10000" ELSE '0';
+  is_jmp   <= '1' WHEN OP_CODE = "10001" ELSE '0';
+  is_call  <= '1' WHEN OP_CODE = "10010" ELSE '0';
+  is_ret   <= '1' WHEN OP_CODE = "10011" ELSE '0';
+  is_rti   <= '1' WHEN OP_CODE = "10100" ELSE '0';
+  is_int   <= '1' WHEN OP_CODE = "10101" ELSE '0';
 
-      -- SETC: Set Carry
-      WHEN SETC =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        SET_CARRY <= '1';
+  -- =================== OPTIMIZED SIGNAL GENERATION ===================
+  
+  -- Decode Stage Signals
+  RD_NXT_INST <= NOT (is_halt OR is_branch_op OR is_call_ret);
+  RD_EN       <= NOT (is_halt OR is_int);
 
-      -- NOT: Bitwise NOT
-      WHEN NOT_OP =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        ALU_SRC <= "00";
-        ALU_OP <= "001";
-        REG_WRT_EN <= '1';
-        WB_DATA <= "01";
+  -- Execute Stage: ALU Control
+  ALU_SRC <= "01" WHEN is_iadd = '1' ELSE "00";
+  
+  -- ALU_OP: Direct mapping from lower bits for ALU instructions
+  -- NOT=001, INC=010, ADD/IADD=011, SUB=100, AND=101
+  ALU_OP(2) <= (OP_CODE(2) AND (is_not OR is_inc)) OR (OP_CODE(2) AND NOT OP_CODE(1) AND (OP_CODE(0) OR is_iadd));
+  ALU_OP(1) <= OP_CODE(1) AND (is_alu_op OR is_iadd);
+  ALU_OP(0) <= (OP_CODE(0) AND (is_alu_op OR is_iadd)) OR is_not;
 
-      -- INC: Increment
-      WHEN INC_OP =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        ALU_SRC <= "00";
-        ALU_OP <= "010";
-        REG_WRT_EN <= '1';
-        WB_DATA <= "01";
+  -- Flags and Branching
+  SET_CARRY <= is_setc;
+  BRANCH    <= is_branch_op OR is_call_ret;
+  BRANCH_T  <= "11" WHEN (is_ret OR is_rti) = '1' ELSE
+               "10" WHEN is_jn = '1' ELSE
+               "01" WHEN is_jz = '1' ELSE
+               "00"; -- JMP, CALL
 
-      -- MOV: Move Register
-      WHEN MOV =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        WB_DATA <= "11";
-        REG_WRT_EN <= '1';
+  -- PC and other Execute signals
+  PC_WE   <= '0';
+  OUT_EN  <= '0';
+  IMM_SIG <= is_iadd OR is_ldm;
 
-      -- ADD: Addition
-      WHEN ADD =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        ALU_SRC <= "00";
-        ALU_OP <= "011";
-        REG_WRT_EN <= '1';
-        WB_DATA <= "01";
+  -- Stack Pointer Operations
+  SP_OP <= "11" WHEN is_rti = '1' ELSE
+           "10" WHEN (is_pop OR is_ret) = '1' ELSE
+           "01" WHEN (is_push OR is_call OR is_int) = '1' ELSE
+           "00";
 
-      -- SUB: Subtraction
-      WHEN SUB =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        ALU_SRC <= "00";
-        ALU_OP <= "100";
-        REG_WRT_EN <= '1';
-        WB_DATA <= "01";
+  -- Memory Stage Signals
+  PC_SEL      <= is_ret OR is_rti;
+  MEM_WRT_EN  <= is_std OR is_push OR is_call OR is_int;
+  
+  MEM_ADDR    <= "10" WHEN (is_stack_op OR is_call_ret OR is_int) = '1' ELSE
+                 "01" WHEN is_mem_op = '1' ELSE
+                 "00";
+  
+  MEM_WRT_DATA <= "10" WHEN is_int = '1' ELSE
+                  "01" WHEN (is_std OR is_push) = '1' ELSE
+                  "00"; -- PC for CALL
 
-      -- AND: Bitwise AND
-      WHEN AND_OP =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        ALU_SRC <= "00";
-        ALU_OP <= "101";
-        REG_WRT_EN <= '1';
-        WB_DATA <= "01";
+  -- Write Back Stage Signals
+  WB_DATA <= "11" WHEN is_mov = '1' ELSE
+             "10" WHEN is_ldm = '1' ELSE
+             "01" WHEN (is_alu_op OR is_iadd) = '1' ELSE
+             "00"; -- Memory data for LDD, POP
 
-      -- IADD: Immediate Add
-      WHEN IADD =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        ALU_SRC <= "01";
-        ALU_OP <= "011";
-        IMM_SIG <= '1';
-        REG_WRT_EN <= '1';
-        WB_DATA <= "01";
-
-      -- LDM: Load Immediate
-      WHEN LDM =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        IMM_SIG <= '1';
-        REG_WRT_EN <= '1';
-        WB_DATA <= "10";
-
-      -- LDD: Load from Memory
-      WHEN LDD =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        MEM_ADDR <= "01";
-        REG_WRT_EN <= '1';
-        WB_DATA <= "00";
-
-      -- STD: Store to Memory
-      WHEN STD =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        MEM_WRT_EN <= '1';
-        MEM_ADDR <= "01";
-        MEM_WRT_DATA <= "01";
-
-      -- PUSH: Push to Stack
-      WHEN PUSH =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        SP_OP <= "01";
-        MEM_WRT_EN <= '1';
-        MEM_ADDR <= "10";
-        MEM_WRT_DATA <= "01";
-
-      -- POP: Pop from Stack
-      WHEN POP =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-        SP_OP <= "10";
-        MEM_ADDR <= "10";
-        REG_WRT_EN <= '1';
-        WB_DATA <= "00";
-
-      -- JZ: Jump if Zero
-      WHEN JZ =>
-        RD_NXT_INST <= '0';
-        RD_EN <= '1';
-        BRANCH <= '1';
-        BRANCH_T <= "01";
-
-      -- JN: Jump if Negative
-      WHEN JN =>
-        RD_NXT_INST <= '0';
-        RD_EN <= '1';
-        BRANCH <= '1';
-        BRANCH_T <= "10";
-
-      -- JMP: Unconditional Jump
-      WHEN JMP =>
-        RD_NXT_INST <= '0';
-        RD_EN <= '1';
-        BRANCH <= '1';
-        BRANCH_T <= "00";
-
-      -- CALL: Call Subroutine
-      WHEN CALL =>
-        RD_NXT_INST <= '0';
-        RD_EN <= '1';
-        BRANCH <= '1';
-        BRANCH_T <= "00";
-        SP_OP <= "01";
-        MEM_WRT_EN <= '1';
-        MEM_ADDR <= "10";
-        MEM_WRT_DATA <= "00";
-
-      -- RET: Return from Subroutine
-      WHEN RET =>
-        RD_NXT_INST <= '0';
-        RD_EN <= '1';
-        BRANCH <= '1';
-        BRANCH_T <= "11";
-        SP_OP <= "10";
-        PC_SEL <= '1';
-        MEM_ADDR <= "10";
-
-      -- RTI: Return from Interrupt
-      WHEN RTI =>
-        RD_NXT_INST <= '0';
-        RD_EN <= '1';
-        BRANCH <= '1';
-        BRANCH_T <= "11";
-        SP_OP <= "11";
-        PC_SEL <= '1';
-        MEM_ADDR <= "10";
-
-      -- INT: Software Interrupt
-      WHEN INT_OP =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '0';
-        SP_OP <= "01";
-        MEM_WRT_EN <= '1';
-        MEM_ADDR <= "10";
-        MEM_WRT_DATA <= "10";
-
-      -- Default case
-      WHEN OTHERS =>
-        RD_NXT_INST <= '1';
-        RD_EN <= '1';
-
-    END CASE;
-  END PROCESS;
+  WB_ADDR     <= "00";
+  REG_WRT_EN  <= is_alu_op OR is_mov OR is_iadd OR is_ldm OR is_ldd OR is_pop;
+  SWAP_SIG    <= '0';
 
 END ARCHITECTURE;
