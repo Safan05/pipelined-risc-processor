@@ -56,11 +56,12 @@ BEGIN
   -----------------------------------------------------------------------------
   -- CONTROL SIGNALS
   -----------------------------------------------------------------------------
+
  if OP_CODE = "00000" then
     -- immediate, leave the signals as it was
-    read_next_inst <= '1';
-    rd_en <= '0';
-    imm_sig <= '0';
+    RD_NXT_INST <= '1';
+    RD_EN <= '0';
+    IMM_SIG <= '0';
 else
     
   -- # Decode Stage
