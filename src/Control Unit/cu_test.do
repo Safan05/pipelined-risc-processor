@@ -2,6 +2,7 @@
 vsim -gui work.CU_TB
 
 # Add waves
+# Note: changing INT to INT_SIG to match the updated testbench signal name
 add wave -position insertpoint sim:/CU_TB/*
 
 # Add dividers for better organization
@@ -9,7 +10,7 @@ add wave -divider "Inputs"
 add wave -position insertpoint \
 sim:/CU_TB/CLK \
 sim:/CU_TB/RST \
-sim:/CU_TB/INT \
+sim:/CU_TB/INT_SIG \
 sim:/CU_TB/OP_CODE
 
 add wave -divider "Decode Stage"
@@ -49,7 +50,7 @@ sim:/CU_TB/test_count \
 sim:/CU_TB/errors
 
 # Run simulation
-run 1000 ns
+run 1200 ns
 
 # Zoom to fit
 wave zoom full

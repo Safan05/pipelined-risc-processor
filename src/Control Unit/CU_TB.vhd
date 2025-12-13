@@ -10,7 +10,7 @@ ARCHITECTURE TB OF CU_TB IS
   -- Component Declaration
   COMPONENT CU
     PORT (
-      CLK, RST, INT : IN STD_LOGIC;
+      CLK, RST, INT_SIG : IN STD_LOGIC;
       OP_CODE : IN STD_LOGIC_VECTOR(4 DOWNTO 0);
       RD_NXT_INST, RD_EN : OUT STD_LOGIC;
       ALU_SRC : OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
@@ -29,7 +29,7 @@ ARCHITECTURE TB OF CU_TB IS
   -- Test Signals
   SIGNAL CLK : STD_LOGIC := '0';
   SIGNAL RST : STD_LOGIC := '1';
-  SIGNAL INT : STD_LOGIC := '0';
+  SIGNAL INT_SIG : STD_LOGIC := '0';
   SIGNAL OP_CODE : STD_LOGIC_VECTOR(4 DOWNTO 0) := (OTHERS => '0');
   
   -- Output Signals
@@ -57,7 +57,7 @@ BEGIN
   UUT: CU PORT MAP (
     CLK => CLK,
     RST => RST,
-    INT => INT,
+    INT_SIG => INT_SIG,
     OP_CODE => OP_CODE,
     RD_NXT_INST => RD_NXT_INST,
     RD_EN => RD_EN,
@@ -305,7 +305,7 @@ BEGIN
   BEGIN
     -- Reset
     RST <= '1';
-    INT <= '0';
+    INT_SIG <= '0';
     WAIT FOR CLK_PERIOD * 2;
     
     WRITE(L, STRING'("========================================"));
@@ -371,7 +371,7 @@ BEGIN
 
     -- Test PUSH (10000)
     OP_CODE <= "10000";
-    check_signals("PUSH", '1', '1', '0', "01", "110", '0', '0', "00", '1', '0', "11", '0', "01", "10", '1', "00", "00", '0', '0');
+    check_signals("PUSH", '1', '1', '0', "01", "110", '0', '0', "00", '1', '0', "10", '0', "01", "10", '1', "00", "00", '0', '0');
 
     -- Test POP (10001)
     OP_CODE <= "10001";
@@ -391,7 +391,7 @@ BEGIN
 
     -- Test CALL (11000)
     OP_CODE <= "11000";
-    check_signals("CALL", '0', '1', '1', "01", "000", '0', '1', "00", '1', '0', "11", '0', "01", "00", '1', "00", "00", '0', '0');
+    check_signals("CALL", '0', '1', '1', "01", "000", '0', '1', "00", '1', '0', "10", '0', "01", "00", '1', "00", "00", '0', '0');
 
     -- Test RET (11001)
     OP_CODE <= "11001";
@@ -399,11 +399,11 @@ BEGIN
 
     -- Test INT (11010)
     OP_CODE <= "11010";
-    check_signals("INT", '1', '1', '0', "01", "000", '0', '1', "00", '1', '0', "11", '1', "01", "00", '1', "00", "00", '0', '0');
+    check_signals("INT", '1', '1', '0', "01", "000", '0', '1', "00", '1', '0', "10", '1', "01", "00", '1', "00", "00", '0', '1');
 
     -- Test RTI (11011)
     OP_CODE <= "11011";
-    check_signals("RTI", '1', '1', '0', "01", "000", '0', '1', "00", '1', '0', "01", '0', "10", "00", '0', "00", "00", '0', '0');
+    check_signals("RTI", '1', '1', '0', "01", "000", '0', '1', "00", '1', '0', "01", '0', "10", "00", '0', "10", "00", '0', '1');
 
     -- Test JZ (11100)
     OP_CODE <= "11100";
