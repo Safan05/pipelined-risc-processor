@@ -67,28 +67,6 @@ BEGIN
     is_group_11 := (group_bits = "11");
     is_iadd := (OP_CODE = "01101");
 
-    -- Defaults
-    next_state <= IDLE;
-    RD_NXT_INST <= '1';
-    RD_EN <= '1';
-    ALU_SRC <= "01";
-    ALU_OP <= "000";
-    SET_CARRY <= '0';
-    BRANCH <= '0';
-    BRANCH_T <= "00";
-    PC_WE <= '1';
-    OUT_EN <= '0';
-    IMM_SIG <= '0';
-    SP_OP <= "00";
-    PC_SEL <= '0';
-    MEM_WRT_EN <= '0';
-    MEM_ADDR <= "00";
-    MEM_WRT_DATA <= "00";
-    WB_DATA <= "00";
-    WB_ADDR <= "00";
-    REG_WRT_EN <= '0';
-    SWAP_SIG <= '0';
-
     IF OP_CODE = "00000" THEN -- Immediate data
       RD_NXT_INST <= '1';
       RD_EN <= '0';
