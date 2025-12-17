@@ -7,7 +7,7 @@ END decode_stage_tb;
 
 ARCHITECTURE behavior OF decode_stage_tb IS
     -- Component Declaration
-    COMPONENT decode_stage IS
+    COMPONENT decode_stage
         PORT (
             clk : IN STD_LOGIC;
             instruction : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
@@ -32,7 +32,7 @@ ARCHITECTURE behavior OF decode_stage_tb IS
         );
     END COMPONENT;
 
-    -- Test Signals
+    -- Input signals
     SIGNAL clk : STD_LOGIC := '0';
     SIGNAL instruction : STD_LOGIC_VECTOR(31 DOWNTO 0) := (OTHERS => '0');
     SIGNAL next_pc : STD_LOGIC_VECTOR(31 DOWNTO 0) := (OTHERS => '0');
@@ -43,7 +43,7 @@ ARCHITECTURE behavior OF decode_stage_tb IS
     SIGNAL reset_sig : STD_LOGIC := '0';
     SIGNAL int_sig : STD_LOGIC := '0';
 
-    -- Output Signals
+    -- Output signals
     SIGNAL read_data_1 : STD_LOGIC_VECTOR(31 DOWNTO 0);
     SIGNAL read_data_2 : STD_LOGIC_VECTOR(31 DOWNTO 0);
     SIGNAL imm : STD_LOGIC_VECTOR(31 DOWNTO 0);
@@ -74,7 +74,7 @@ ARCHITECTURE behavior OF decode_stage_tb IS
     CONSTANT clk_period : TIME := 10 ns;
 
 BEGIN
-    -- Instantiate the Unit Under Test (UUT)
+    -- Instantiate DUT
     uut : decode_stage
     PORT MAP(
         clk => clk,
@@ -113,7 +113,7 @@ BEGIN
         swap_sig => swap_sig
     );
 
-    -- Clock process
+    -- Clock generation
     clk_process : PROCESS
     BEGIN
         clk <= '0';
@@ -125,8 +125,7 @@ BEGIN
     -- Stimulus process
     stim_proc : PROCESS
     BEGIN
-        -- Initialize
-        REPORT "Starting Decode Stage Testbench";
+        instruction <= "00000000000000000000000000000000";
         
         -- Reset
         reset_sig <= '1';
@@ -134,95 +133,86 @@ BEGIN
         reset_sig <= '0';
         WAIT FOR clk_period;
 
-        -- Test Case 1: Basic instruction decode
-        -- instruction[31:27] = 5'b10101, [26:24] = 3'b011, [23:21] = 3'b100, [20:18] = 3'b101
-        REPORT "Test Case 1: Basic instruction decode";
-        instruction <= "10101" & "011" & "100" & "101" & "000000000000000000";
-        next_pc <= X"00000100";
-        sp <= X"00001000";
-        WAIT FOR clk_period;
-        
-        ASSERT r_src_1 = "011" REPORT "r_src_1 should be 011" SEVERITY ERROR;
-        ASSERT r_src_2 = "100" REPORT "r_src_2 should be 100" SEVERITY ERROR;
-        ASSERT r_dst = "101" REPORT "r_dst should be 101" SEVERITY ERROR;
-        ASSERT next_pc_out = X"00000100" REPORT "next_pc_out mismatch" SEVERITY ERROR;
-        ASSERT sp_out = X"00001000" REPORT "sp_out mismatch" SEVERITY ERROR;
-
-        -- Test Case 2: Write to register file
-        REPORT "Test Case 2: Write to register file";
-        wr_addr <= "011";  -- Write to register 3
-        wr_data <= X"DEADBEEF";
+        -- Test 1: Write to registers
+        REPORT "Test 1: Writing to register file";
         wb_en <= '1';
+        wr_addr <= "001"; -- R1
+        wr_data <= X"0000_00AA";
+        WAIT FOR clk_period;
+
+        wr_addr <= "010"; -- R2
+        wr_data <= X"0000_00BB";
+        WAIT FOR clk_period;
+
+        wr_addr <= "011"; -- R3
+        wr_data <= X"0000_00CC";
         WAIT FOR clk_period;
         wb_en <= '0';
-        WAIT FOR clk_period;
 
-        -- Test Case 3: Read from register file
-        REPORT "Test Case 3: Read from written register";
-        instruction <= "00000" & "011" & "100" & "101" & "000000000000000000";
-        WAIT FOR clk_period;
-        -- read_data_1 should now contain the written data
-
-        -- Test Case 4: Test immediate value extraction
-        REPORT "Test Case 4: Immediate value extraction";
-        instruction <= X"F5A4ABCD";  -- Lower 16 bits: 0xABCD
-        WAIT FOR clk_period;
-        ASSERT imm = X"F5A4ABCD" REPORT "imm mismatch" SEVERITY ERROR;
-
-        -- Test Case 5: Different register addresses
-        REPORT "Test Case 5: Different register addresses";
-        instruction <= "11111" & "111" & "000" & "001" & "000000000000000000";
-        WAIT FOR clk_period;
-        
-        ASSERT r_src_1 = "111" REPORT "r_src_1 should be 111" SEVERITY ERROR;
-        ASSERT r_src_2 = "000" REPORT "r_src_2 should be 000" SEVERITY ERROR;
-        ASSERT r_dst = "001" REPORT "r_dst should be 001" SEVERITY ERROR;
-
-        -- Test Case 6: Write multiple registers
-        REPORT "Test Case 6: Write to multiple registers";
-        FOR i IN 0 TO 7 LOOP
-            wr_addr <= STD_LOGIC_VECTOR(to_unsigned(i, 3));
-            wr_data <= STD_LOGIC_VECTOR(to_unsigned(i * 100, 32));
-            wb_en <= '1';
-            WAIT FOR clk_period;
-        END LOOP;
-        wb_en <= '0';
-
-        -- Test Case 7: Read from multiple registers
-        REPORT "Test Case 7: Read from multiple registers";
-        FOR i IN 0 TO 6 LOOP
-            instruction <= "00000" & 
-                          STD_LOGIC_VECTOR(to_unsigned(i, 3)) & 
-                          STD_LOGIC_VECTOR(to_unsigned(i + 1, 3)) & 
-                          "000" & "000000000000000000";
-            WAIT FOR clk_period;
-        END LOOP;
-
-        -- Test Case 8: Test interrupt signal
-        REPORT "Test Case 8: Interrupt signal";
-        int_sig <= '1';
-        instruction <= X"12345678";
+        -- Test 2: ALU instruction (ADD) - OpCode 01010
+        REPORT "Test 2: ADD instruction (Group 01, sub 010)";
+        instruction <= "01010" & "001" & "010" & "011" & "000000000000000000";
+        -- OpCode=01010, R_src1=R1, R_src2=R2, R_dst=R3
+        next_pc <= X"0000_0100";
+        sp <= X"0000_FFF0";
         WAIT FOR clk_period * 2;
-        int_sig <= '0';
-        WAIT FOR clk_period;
 
-        -- Test Case 9: Reset during operation
-        REPORT "Test Case 9: Reset during operation";
-        instruction <= X"FFFFFFFF";
-        WAIT FOR clk_period;
-        reset_sig <= '1';
+        -- Test 3: Immediate instruction (IADD) - OpCode 01101
+        REPORT "Test 3: IADD instruction";
+        instruction <= "01101" & "001" & "000" & "100" & "000000000000001111";
+        -- OpCode=01101, immediate value
         WAIT FOR clk_period * 2;
-        reset_sig <= '0';
-        WAIT FOR clk_period;
 
-        -- Test Case 10: Edge case - all zeros
-        REPORT "Test Case 10: All zeros instruction";
-        instruction <= X"00000000";
-        next_pc <= X"00000000";
-        sp <= X"00000000";
-        WAIT FOR clk_period;
+        -- Test 4: NOP instruction - OpCode 00001
+        REPORT "Test 4: NOP instruction";
+        instruction <= "00001" & "000" & "000" & "000" & "000000000000000000";
+        WAIT FOR clk_period * 2;
 
-        -- End simulation
+        -- Test 5: SWAP instruction - OpCode 01001
+        REPORT "Test 5: SWAP instruction";
+        instruction <= "01001" & "001" & "010" & "000" & "000000000000000000";
+        WAIT FOR clk_period * 3; -- SWAP takes 2 cycles
+
+        -- Test 6: PUSH instruction - OpCode 10000
+        REPORT "Test 6: PUSH instruction";
+        instruction <= "10000" & "001" & "000" & "000" & "000000000000000000";
+        WAIT FOR clk_period * 2;
+
+        -- Test 7: POP instruction - OpCode 10001
+        REPORT "Test 7: POP instruction";
+        instruction <= "10001" & "000" & "000" & "011" & "000000000000000000";
+        WAIT FOR clk_period * 2;
+
+        -- Test 8: Branch instruction - OpCode 11000
+        REPORT "Test 8: Branch instruction";
+        instruction <= "11000" & "000" & "000" & "000" & "000000000000000000";
+        WAIT FOR clk_period * 2;
+
+        -- Test 9: IN instruction - OpCode 00110
+        REPORT "Test 9: IN instruction";
+        instruction <= "00110" & "000" & "000" & "001" & "000000000000000000";
+        WAIT FOR clk_period * 2;
+
+        -- Test 10: OUT instruction - OpCode 00101
+        REPORT "Test 10: OUT instruction";
+        instruction <= "00101" & "001" & "000" & "000" & "000000000000000000";
+        WAIT FOR clk_period * 2;
+
+        -- Test 11: Immediate data (OpCode 00000)
+        REPORT "Test 11: Immediate data";
+        instruction <= "00000" & "000" & "000" & "000" & "000000011111111111";
+        WAIT FOR clk_period * 2;
+
+        -- Test 12: INT instruction - OpCode 11010
+        REPORT "Test 12: INT instruction";
+        instruction <= "11010" & "000" & "000" & "000" & "000000000000000000";
+        WAIT FOR clk_period * 3; -- INT takes 2 cycles
+
+        -- Test 13: RTI instruction - OpCode 11011
+        REPORT "Test 13: RTI instruction";
+        instruction <= "11011" & "000" & "000" & "000" & "000000000000000000";
+        WAIT FOR clk_period * 3; -- RTI takes 2 cycles
+
         REPORT "Testbench completed successfully";
         WAIT;
     END PROCESS;

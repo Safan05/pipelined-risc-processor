@@ -138,7 +138,7 @@ BEGIN
         r_data2 => read_data_2
     );
 
-    decode_proc : PROCESS (instruction)
+    decode_proc : PROCESS (clk, instruction)
     BEGIN
         r_addr1_sig <= instruction(26 DOWNTO 24);
         r_addr2_sig <= instruction(23 DOWNTO 21);
