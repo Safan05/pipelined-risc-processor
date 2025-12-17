@@ -102,6 +102,20 @@ BEGIN
 
           -- # CYCLE 1 / NORMAL INSTRUCTIONS #
         WHEN OTHERS =>
+        -- default signal values
+          RD_NXT_INST <= '1';
+          IMM_SIG <= '0';
+          SET_CARRY <= '0';
+          BRANCH <= '0';
+          PC_WE <= '1';
+          OUT_EN <= '0';
+          PC_SEL <= '0';
+          MEM_WRT_EN <= '0';
+          SWAP_SIG <= '0';
+          REG_WRT_EN <= '0';
+          WB_DATA <= (OTHERS => '0');
+          WB_ADDR <= (OTHERS => '0');
+          SP_OP <= "00";
 
           -- RD_NXT_INST Logic
           IF is_iadd OR (is_group_10 AND (sub_bits(2) = '1' OR sub_bits = "010" OR sub_bits = "011")) OR
