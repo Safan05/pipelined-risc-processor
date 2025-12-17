@@ -12,6 +12,7 @@ entity executeStage is
         REG_DATA2           : in  std_logic_vector(31 downto 0);
         IMM_DATA            : in  std_logic_vector(31 downto 0);
         PC_INC_IN           : in  std_logic_vector(31 downto 0);
+        PC_STACK_IN         : in  std_logic_vector(31 downto 0);
         R_SRC1_ADDR         : in  std_logic_vector(2 downto 0);
         R_SRC2_ADDR         : in  std_logic_vector(2 downto 0);
         R_DST_ADDR          : in  std_logic_vector(2 downto 0);
@@ -101,7 +102,6 @@ architecture Behavioral of executeStage is
     -- Flag Register (Stores flags from PREVIOUS instruction)
     -- Bit 0: Zero, Bit 1: Carry, Bit 2: Negative
     SIGNAL FLAG_REGISTER : STD_LOGIC_VECTOR(2 downto 0) := (others => '0'); 
-
 begin
 
     -- 1. Hardware Instantiation (Must be outside process)
@@ -133,6 +133,7 @@ begin
 
     -- 2. Sequential Process (Clocked Logic)
     process(clk, rst)
+    variable BRANCH_T_COND : std_logic;
     begin
         if rst = '1' then
             ALU_OUT <= (others => '0');
@@ -199,7 +200,27 @@ begin
             
             -- Branch Calculation
             
-
+            if (BRANCH_T_SIG = "00") then
+                BRANCH_T_COND := '1'; -- Unconditional
+            elsif (BRANCH_T_SIG == "01") then
+                BRANCH_T_COND := FLAG_REGISTER(0); -- Zero
+            elsif (BRANCH_T_SIG == "10") then
+                BRANCH_T_COND := FLAG_REGISTER(1); -- Carry
+            else
+                BRANCH_T_COND := FLAG_REGISTER(2); -- Negative
+            end if;
+            
+            BRANCH_T_COND := BRANCH_T_COND AND BRANCH_SIG;
+            -- using BRANCH_T_COND to decide PC_BRANCH_OUT
+            if (PC_SEL_SIG = '1') then
+                if (BRANCH_T_COND = '1') then
+                    PC_BRANCH_OUT <= ALU_RESULT_WIRE; -- Branch Taken
+                else
+                    PC_BRANCH_OUT <= PC_INC_IN;        -- No Branch
+                end if;
+            else
+                PC_BRANCH_OUT <= PC_STACK_IN;    
+            end if;
             -- ==========================================================
             -- C. FLAG LOGIC (Read Old -> Write New)
             -- ==========================================================
