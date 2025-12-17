@@ -77,7 +77,7 @@ BEGIN
     REG_WRT_EN  <= '0';
     SWAP_SIG    <= '0';
 
-    IF OP_CODE = "00000" THEN -- NOP
+    IF OP_CODE = "00000" THEN -- Immediate data
       RD_NXT_INST <= '1'; RD_EN <= '0'; IMM_SIG <= '0';
     ELSE
       
@@ -124,7 +124,9 @@ BEGIN
             RD_EN <= '1';
 
             -- Execute Stage
-            IF is_iadd OR (is_group_10 AND (sub_bits(2) = '1' OR sub_bits = "010" OR sub_bits = "011")) THEN
+            IF OP_CODE = "00110" THEN
+              ALU_SRC <= "11"; -- IN Instruction
+            ELSIF is_iadd OR (is_group_10 AND (sub_bits(2) = '1' OR sub_bits = "010" OR sub_bits = "011")) THEN
               ALU_SRC <= "10";
             ELSIF is_group_00 AND sub_bits = "100" THEN
               ALU_SRC <= "00";
