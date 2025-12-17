@@ -24,7 +24,7 @@ BEGIN
     PROCESS (clk, rst)
     BEGIN
         IF rst = '1' THEN
-            pc_reg <= (OTHERS => '0');
+            pc_reg <= (OTHERS => '0'); -- current PC?? or reset value
         ELSIF RISING_EDGE(clk) THEN
             IF pc_en = '1' THEN
                 CASE pc_sel IS
