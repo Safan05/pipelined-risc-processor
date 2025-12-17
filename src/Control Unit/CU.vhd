@@ -23,7 +23,7 @@ ENTITY CU is
 
     -- # Write Back Stage Signals
     WB_DATA, WB_ADDR: OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
-    REG_WRT_EN, SWAP_SIG: OUT STD_LOGIC
+    REG_WRT_EN, STALL_SIG: OUT STD_LOGIC
   ); 
 END ENTITY CU;
 
@@ -55,28 +55,6 @@ BEGIN
     is_group_11 := (group_bits = "11");
     is_iadd     := (OP_CODE = "01101");
 
-    -- Defaults
-    next_state  <= IDLE; 
-    RD_NXT_INST <= '1'; 
-    RD_EN       <= '1';
-    ALU_SRC     <= "01";
-    ALU_OP      <= "000";
-    SET_CARRY   <= '0';
-    BRANCH      <= '0';
-    BRANCH_T    <= "00";
-    PC_WE       <= '1';
-    OUT_EN      <= '0';
-    IMM_SIG     <= '0';
-    SP_OP       <= "00";
-    PC_SEL      <= '0';
-    MEM_WRT_EN  <= '0';
-    MEM_ADDR    <= "00";
-    MEM_WRT_DATA<= "00";
-    WB_DATA     <= "00";
-    WB_ADDR     <= "00";
-    REG_WRT_EN  <= '0';
-    SWAP_SIG    <= '0';
-
     IF OP_CODE = "00000" THEN -- Immediate data
       RD_NXT_INST <= '1'; RD_EN <= '0'; IMM_SIG <= '0';
     ELSE
@@ -88,7 +66,7 @@ BEGIN
             WB_DATA     <= "01"; 
             WB_ADDR     <= "00"; 
             REG_WRT_EN  <= '1';
-            SWAP_SIG    <= '0'; 
+            STALL_SIG    <= '0'; 
             next_state  <= IDLE;
 
         -- # CYCLE 2: INT (PUSH FLAGS) #
@@ -98,19 +76,42 @@ BEGIN
             MEM_ADDR    <= "01"; -- SP Address
             MEM_WRT_DATA<= "11"; -- Select FLAGS [Matches Excel Encoding '11']
             PC_WE       <= '0';  
-            SWAP_SIG    <= '0';  
+            STALL_SIG    <= '0';  
             next_state  <= IDLE;
 
         -- # CYCLE 2: RTI (POP PC) #
         WHEN RTI_CYCLE_2 =>
             SP_OP       <= "01"; -- POP (Increment) [Matches Excel '01']
             -- Note: Data read from memory goes to PC automatically via datapath wiring for RET/RTI
-            SWAP_SIG    <= '0';  
+            STALL_SIG    <= '0';  
             next_state  <= IDLE;
 
         -- # CYCLE 1 / NORMAL INSTRUCTIONS #
         WHEN OTHERS =>
             
+            -- Defaults
+            next_state  <= IDLE; 
+            RD_NXT_INST <= '1'; 
+            RD_EN       <= '1';
+            ALU_SRC     <= "01";
+            ALU_OP      <= "000";
+            SET_CARRY   <= '0';
+            BRANCH      <= '0';
+            BRANCH_T    <= "00";
+            PC_WE       <= '1';
+            OUT_EN      <= '0';
+            IMM_SIG     <= '0';
+            SP_OP       <= "00";
+            PC_SEL      <= '0';
+            MEM_WRT_EN  <= '0';
+            MEM_ADDR    <= "00";
+            MEM_WRT_DATA<= "00";
+            WB_DATA     <= "00";
+            WB_ADDR     <= "00";
+            REG_WRT_EN  <= '0';
+            STALL_SIG   <= '0';
+
+
             -- RD_NXT_INST Logic
             IF is_iadd OR (is_group_10 AND (sub_bits(2) = '1' OR sub_bits = "010" OR sub_bits = "011")) OR 
                (is_group_11 AND NOT (sub_bits = "001" OR sub_bits = "010" OR sub_bits = "011")) THEN
@@ -197,19 +198,19 @@ BEGIN
 
             -- State Triggers
             IF OP_CODE = "01001" THEN -- SWAP
-               SWAP_SIG    <= '1';
+               STALL_SIG    <= '1';
                next_state  <= SWAP_CYCLE_2;
             
             ELSIF OP_CODE = "11010" THEN -- INT
-               SWAP_SIG    <= '1';
+               STALL_SIG    <= '1';
                next_state  <= INT_CYCLE_2;
 
             ELSIF OP_CODE = "11011" THEN -- RTI
-               SWAP_SIG    <= '1';
+               STALL_SIG    <= '1';
                next_state  <= RTI_CYCLE_2;
 
             ELSE
-               SWAP_SIG    <= '0';
+               STALL_SIG    <= '0';
                next_state  <= IDLE;
             END IF;
 
