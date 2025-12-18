@@ -1,10 +1,12 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
 ENTITY mem_addr_handler IS
     PORT (
         sel : IN STD_LOGIC_VECTOR(1 DOWNTO 0);
         pc_addr : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
         alu_addr : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
         sp : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
-        sp_buffer : IN STD_LOGIC_VECTOR(31 DOWNTO 0)
+        sp_buffer : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
 
         mem_addr : OUT STD_LOGIC_VECTOR(31 DOWNTO 0)
     );

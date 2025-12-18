@@ -117,7 +117,7 @@ begin
         NEGATIVE => NEG_WIRE
     );
 
-    PORT MAP_FwdUnit: Forwarding_Unit
+    MAP_FwdUnit: Forwarding_Unit
     PORT MAP (
         Rsrc1 => R_SRC1_ADDR,
         Rsrc2 => R_SRC2_ADDR,
@@ -202,9 +202,9 @@ begin
             
             if (BRANCH_T_SIG = "00") then
                 BRANCH_T_COND := '1'; -- Unconditional
-            elsif (BRANCH_T_SIG == "01") then
+            elsif (BRANCH_T_SIG = "01") then
                 BRANCH_T_COND := FLAG_REGISTER(0); -- Zero
-            elsif (BRANCH_T_SIG == "10") then
+            elsif (BRANCH_T_SIG = "10") then
                 BRANCH_T_COND := FLAG_REGISTER(1); -- Carry
             else
                 BRANCH_T_COND := FLAG_REGISTER(2); -- Negative

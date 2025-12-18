@@ -122,8 +122,8 @@ BEGIN
     reg_file_inst : Reg_File
     GENERIC MAP(
         NUM_REGS => 8,
-        REG_WIDTH => 32,
-        ADDR_WIDTH => 3
+        REG_WIDTH => 32
+    --    ADDR_WIDTH => 3
     )
     PORT MAP(
         clk => clk,
