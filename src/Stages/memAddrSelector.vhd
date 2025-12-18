@@ -1,5 +1,5 @@
-library IEEE;
-use IEEE.STD_LOGIC_1164.ALL;
+LIBRARY IEEE;
+USE IEEE.STD_LOGIC_1164.ALL;
 ENTITY mem_addr_handler IS
     PORT (
         sel : IN STD_LOGIC_VECTOR(1 DOWNTO 0);
@@ -7,17 +7,16 @@ ENTITY mem_addr_handler IS
         alu_addr : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
         sp : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
         sp_buffer : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
-
-        mem_addr : OUT STD_LOGIC_VECTOR(31 DOWNTO 0)
+        mem_addr : OUT STD_LOGIC_VECTOR(20 DOWNTO 0)
     );
 END ENTITY;
 
 ARCHITECTURE rtl OF mem_addr_handler IS
 BEGIN
     WITH sel SELECT
-        mem_addr <= pc_addr WHEN "00", -- Instruction fetch
-        sp_buffer WHEN "01", -- Stack buffer
-        sp WHEN "10", -- Stack
-        alu_addr WHEN "11", -- Load/Store
+        mem_addr <= pc_addr(20 DOWNTO 0) WHEN "00", -- Instruction fetch
+        sp_buffer(20 DOWNTO 0) WHEN "01", -- Stack buffer
+        sp(20 DOWNTO 0) WHEN "10", -- Stack
+        alu_addr(20 DOWNTO 0) WHEN "11", -- Load/Store
         (OTHERS => '0') WHEN OTHERS;
 END ARCHITECTURE;
