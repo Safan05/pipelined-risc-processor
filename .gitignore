@@ -1,2 +1,85 @@
-/*.pdf
-/*.xlsx
+############################
+# OS / Editor
+############################
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.bak
+*.tmp
+*.log
+.vscode/
+.idea/
+
+############################
+# ModelSim / Questa
+############################
+work/
+transcript
+vsim.wlf
+*.wlf
+modelsim.ini
+*.mpf
+*.cr.mti
+*.dbg
+*.wave
+*.do.bak
+
+############################
+# Quartus
+############################
+db/
+incremental_db/
+output_files/
+simulation/
+*.rpt
+*.summary
+*.chg
+*.qws
+*.qdf
+*.pin
+*.jdi
+*.jic
+*.map
+*.fit
+*.sta
+*.asm
+*.sof
+*.pof
+*.smsg
+*.qpf.bak
+*.qsf.bak
+
+############################
+# Generated HDL / Netlists
+############################
+*.vo
+*.vho
+*.sdf
+*.cmp
+*.ppf
+
+############################
+# IP / Qsys / Platform Designer
+############################
+*.ipregen
+*.qsys
+*.qsys_edit
+*.sip
+*.spd
+*.bsf
+*.cbx
+
+############################
+# Simulation Temp Files
+############################
+*.vcd
+*.fst
+*.ghw
+
+############################
+# Archives / Backups
+############################
+*.zip
+*.tar
+*.tar.gz
