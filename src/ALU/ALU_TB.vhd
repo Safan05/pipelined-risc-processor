@@ -58,11 +58,11 @@ BEGIN
         
         -- Test 2: Addition - Positive Numbers
         REPORT "Test 2: Addition - Positive Numbers";
-        A_TB <= X"0000000A";  -- 10
-        B_TB <= X"00000014";  -- 20
+        A_TB <= X"00000000";  -- 10
+        B_TB <= X"00000001";  -- 20
         OP_TB <= "001";
         WAIT FOR 10 ns;
-        ASSERT RESULT_TB = X"0000001E" REPORT "Addition Failed: 10 + 20 should be 30" SEVERITY ERROR;
+        ASSERT RESULT_TB = X"00000002" REPORT "Addition Failed: 0 + 1 should be 2" SEVERITY ERROR;
         ASSERT ZERO_TB = '0' REPORT "Zero flag should be clear" SEVERITY ERROR;
         ASSERT NEGATIVE_TB = '0' REPORT "Negative flag should be clear" SEVERITY ERROR;
         

@@ -1,17 +1,21 @@
--- writeBack
+-- writeBack Stage
+-- Takes data from MEM/WB Register, selects write-back data (1 clock cycle)
+LIBRARY IEEE;
+USE IEEE.STD_LOGIC_1164.ALL;
+USE IEEE.NUMERIC_STD.ALL;
 
 entity writeBackStage is
     Port ( clk             : in  std_logic;
            rst             : in  std_logic;
            
-           -- Inputs from Memory Stage (to be registered in MEM/WB)
+           -- Inputs from MEM/WB Register (already registered)
            ALU_OUT_IN      : in  std_logic_vector(31 downto 0);
            MEM_OUT_IN      : in  std_logic_vector(31 downto 0);
            READ_DATA_1_IN  : in  std_logic_vector(31 downto 0);
            IN_PORT_IN      : in  std_logic_vector(31 downto 0);
            WB_ADDR_IN      : in  std_logic_vector(2 downto 0);
            
-           -- Control Signals
+           -- Control Signals from MEM/WB Register
            WB_EN_IN        : in  std_logic;
            WB_DATA_SIG     : in  std_logic_vector(1 downto 0);
            
@@ -23,48 +27,25 @@ entity writeBackStage is
 end writeBackStage;
 
 architecture Behavioral of writeBackStage is
-    -- MEM/WB Pipeline Register Signals
-    signal alu_out_reg      : std_logic_vector(31 downto 0);
-    signal mem_out_reg      : std_logic_vector(31 downto 0);
-    signal read_data_1_reg  : std_logic_vector(31 downto 0);
-    signal in_port_reg      : std_logic_vector(31 downto 0);
-    signal wb_addr_reg      : std_logic_vector(2 downto 0);
-    signal wb_en_reg        : std_logic;
-    signal wb_data_sig_reg  : std_logic_vector(1 downto 0);
 begin
 
-    -- MEM/WB Pipeline Register
-    process(clk, rst)
-    begin
-        if rst = '1' then
-            alu_out_reg     <= (others => '0');
-            mem_out_reg     <= (others => '0');
-            read_data_1_reg <= (others => '0');
-            in_port_reg     <= (others => '0');
-            wb_addr_reg     <= (others => '0');
-            wb_en_reg       <= '0';
-            wb_data_sig_reg <= (others => '0');
-        elsif rising_edge(clk) then
-            alu_out_reg     <= ALU_OUT_IN;
-            mem_out_reg     <= MEM_OUT_IN;
-            read_data_1_reg <= READ_DATA_1_IN;
-            in_port_reg     <= IN_PORT_IN;
-            wb_addr_reg     <= WB_ADDR_IN;
-            wb_en_reg       <= WB_EN_IN;
-            wb_data_sig_reg <= WB_DATA_SIG;
-        end if;
-    end process;
-
-    -- Write Back MUX
-    -- 00: ALU Out
-    -- 01: Read Data 1 (Used for SWAP, etc.)
+    -- =============================================================
+    -- Write Back MUX (COMBINATIONAL - executes in same cycle)
+    -- Data is ALREADY registered in MEM/WB Register
+    -- This stage is purely a MUX selection
+    -- =============================================================
+    -- 00: ALU Out (Used for ALU Ops, MOV, LDM - Imm passes through ALU)
+    -- 01: IN Port
     -- 10: Memory Out (Used for LDD, POP)
-    REG_WRITE_DATA <= mem_out_reg     when wb_data_sig_reg = "10" else
-                      read_data_1_reg when wb_data_sig_reg = "01" else
-                      alu_out_reg; -- Default "00"
+    -- 11: Read Data 1 (Used for SWAP)
+    
+    REG_WRITE_DATA <= MEM_OUT_IN     when WB_DATA_SIG = "10" else
+                      IN_PORT_IN     when WB_DATA_SIG = "01" else
+                      READ_DATA_1_IN when WB_DATA_SIG = "11" else
+                      ALU_OUT_IN;  -- Default "00"
 
-    -- Pass-through registered signals to Register File
-    REG_WRITE_EN   <= wb_en_reg;
-    REG_WRITE_ADDR <= wb_addr_reg;
+    -- Pass-through signals to Register File
+    REG_WRITE_EN   <= WB_EN_IN;
+    REG_WRITE_ADDR <= WB_ADDR_IN;
 
 end Behavioral;

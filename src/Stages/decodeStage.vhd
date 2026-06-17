@@ -29,6 +29,8 @@ ENTITY decode_stage IS
         branch_t : OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
         pc_we, out_en, imm_sig : OUT STD_LOGIC;
         sp_op : OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
+        sp_or_r1 : OUT STD_LOGIC;           -- 1 = use SP as ALU src1
+        sp_wrt_en : OUT STD_LOGIC;          -- SP register write enable
 
         -- # Memory Stage Signals
         pc_sel, mem_wrt_en : OUT STD_LOGIC;
@@ -55,6 +57,8 @@ ARCHITECTURE decode_stage_logic OF decode_stage IS
             branch_t : OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
             pc_we, out_en, imm_sig : OUT STD_LOGIC;
             sp_op : OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
+            sp_or_r1 : OUT STD_LOGIC;
+            sp_wrt_en : OUT STD_LOGIC;
 
             -- # Memory Stage Signals
             pc_sel, mem_wrt_en : OUT STD_LOGIC;
@@ -109,6 +113,8 @@ BEGIN
         out_en => out_en,
         imm_sig => imm_sig,
         sp_op => sp_op,
+        sp_or_r1 => sp_or_r1,
+        sp_wrt_en => sp_wrt_en,
         pc_sel => pc_sel,
         mem_wrt_en => mem_wrt_en,
         mem_addr => mem_addr,
@@ -138,20 +144,23 @@ BEGIN
         r_data2 => read_data_2
     );
 
-    decode_proc : PROCESS (clk, instruction)
-    BEGIN
-        r_addr1_sig <= instruction(26 DOWNTO 24);
-        r_addr2_sig <= instruction(23 DOWNTO 21);
-        r_dst_sig <= instruction(20 DOWNTO 18);
+    -- =============================================================
+    -- Decode Logic (COMBINATIONAL - concurrent assignments)
+    -- =============================================================
+    -- Extract register addresses from instruction
+    r_addr1_sig <= instruction(26 DOWNTO 24);
+    r_addr2_sig <= instruction(23 DOWNTO 21);
+    r_dst_sig <= instruction(20 DOWNTO 18);
+    op_code_sig <= instruction(31 DOWNTO 27);
+    
+    -- Output source register addresses to ID/EX
+    r_src_1 <= r_addr1_sig;
+    r_src_2 <= r_addr2_sig;
+    r_dst <= r_dst_sig;
+    
+    -- Pass-through data
+    imm <= instruction;
+    next_pc_out <= next_pc;
+    sp_out <= sp;
 
-        r_src_1 <= r_addr1_sig;
-        r_src_2 <= r_addr2_sig;
-        r_dst <= r_dst_sig;
-
-        imm <= instruction;
-        next_pc_out <= next_pc;
-        sp_out <= sp;
-
-        op_code_sig <= instruction(31 DOWNTO 27);
-    END PROCESS decode_proc;
 END decode_stage_logic;

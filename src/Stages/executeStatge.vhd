@@ -11,6 +11,7 @@ entity executeStage is
         REG_DATA1           : in  std_logic_vector(31 downto 0);
         REG_DATA2           : in  std_logic_vector(31 downto 0);
         IMM_DATA            : in  std_logic_vector(31 downto 0);
+        IMM_BYPASS          : in  std_logic_vector(31 downto 0); -- Direct from IF/ID for 2-word instr
         PC_INC_IN           : in  std_logic_vector(31 downto 0);
         PC_STACK_IN         : in  std_logic_vector(31 downto 0);
         R_SRC1_ADDR         : in  std_logic_vector(2 downto 0);
@@ -46,22 +47,25 @@ entity executeStage is
         REG_WRT_EN          : IN STD_LOGIC;
         SWAP_SIG            : IN STD_LOGIC;
 
-        -- Control Signals (Output Pass-through)
-        PC_SEL_SIG_OUT      : OUT STD_LOGIC;
-        MEM_WRT_EN_SIG_OUT  : OUT STD_LOGIC;
-        MEM_ADDR_SIG_OUT    : OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
-        MEM_WRT_DATA_SIG_OUT: OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
-        WB_DATA_SIG_OUT     : OUT STD_LOGIC_VECTOR(1 DOWNTO 0);
-        REG_WRT_EN_OUT      : OUT STD_LOGIC;
-        SWAP_SIG_OUT        : OUT STD_LOGIC;
-
         -- Forwarding Unit Inputs
         WB_ADDR_MEM_STAGE   : in  std_logic_vector(2 downto 0);
         WB_ADDR_WB_STAGE    : in  std_logic_vector(2 downto 0);
         WB_EN_MEM_STAGE     : in  std_logic;
         WB_EN_WB_STAGE      : in  std_logic;
         ALU_OUT_MEM_STAGE   : in  std_logic_vector(31 downto 0);
-        ALU_OUT_WB_STAGE    : in  std_logic_vector(31 downto 0)
+        ALU_OUT_WB_STAGE    : in  std_logic_vector(31 downto 0);
+
+        -- Control Signal Outputs (pass-through to EX/MEM)
+        PC_SEL_SIG_OUT      : out std_logic;
+        MEM_WRT_EN_SIG_OUT  : out std_logic;
+        MEM_ADDR_SIG_OUT    : out std_logic_vector(1 downto 0);
+        MEM_WRT_DATA_SIG_OUT: out std_logic_vector(1 downto 0);
+        WB_DATA_SIG_OUT     : out std_logic_vector(1 downto 0);
+        REG_WRT_EN_OUT      : out std_logic;
+        SWAP_SIG_OUT        : out std_logic;
+        
+        -- Flush output (to flush IF/ID and ID/EX when branch taken)
+        FLUSH_OUT           : out std_logic
     );
 end executeStage;
 
@@ -77,7 +81,7 @@ architecture Behavioral of executeStage is
     );
     end component;
 
-    component Forwarding_Unit is
+    component ForwardUnit is
     PORT (
         Rsrc1, Rsrc2 : IN STD_LOGIC_VECTOR(2 DOWNTO 0);
         EX_MEM_Rdst, MEM_WB_Rdst : IN STD_LOGIC_VECTOR(2 DOWNTO 0);
@@ -95,6 +99,9 @@ architecture Behavioral of executeStage is
     -- Wires from ALU (Combinational)
     SIGNAL ALU_RESULT_WIRE : STD_LOGIC_VECTOR(31 downto 0);
     SIGNAL ZERO_WIRE, CARRY_WIRE, NEG_WIRE : STD_LOGIC;
+    
+    -- Branch taken signal (combinational)
+    SIGNAL branch_taken : STD_LOGIC;
     
     -- Mux Output Holders
     SIGNAL SRC_SEL1_OUT, SRC_SEL2_OUT : STD_LOGIC_VECTOR(31 DOWNTO 0);
@@ -117,7 +124,7 @@ begin
         NEGATIVE => NEG_WIRE
     );
 
-    MAP_FwdUnit: Forwarding_Unit
+    MAP_FwdUnit: ForwardUnit
     PORT MAP (
         Rsrc1 => R_SRC1_ADDR,
         Rsrc2 => R_SRC2_ADDR,
@@ -131,73 +138,85 @@ begin
         out1_mux2 => Forward_mux_1(1)
     );
 
-    -- 2. Sequential Process (Clocked Logic)
+    -- ============================================================
+    -- COMBINATIONAL PROCESS: ALU Input Selection (No clock delay)
+    -- ============================================================
+    ALU_INPUT_MUX: process(Forward_mux_0, Forward_mux_1, SP_OR_R1, SP_VALUE, REG_DATA1, REG_DATA2,
+                           ALU_SRC_SIG, IMM_SIG, IMM_BYPASS, IMM_DATA,
+                           ALU_OUT_MEM_STAGE, ALU_OUT_WB_STAGE)
+    begin
+        -- ALU Input 1 Selection (with forwarding)
+        if Forward_mux_0 = "10" then
+            ALU_IN1 <= ALU_OUT_MEM_STAGE;  -- Forward from EX/MEM
+        elsif Forward_mux_0 = "01" then
+            ALU_IN1 <= ALU_OUT_WB_STAGE;   -- Forward from MEM/WB
+        else
+            -- Default: Normal input (no forwarding, or undefined)
+            if SP_OR_R1 = '1' then
+                ALU_IN1 <= SP_VALUE;
+            else
+                ALU_IN1 <= REG_DATA1;
+            end if;
+        end if;
+
+        -- ALU Input 2 Selection (with forwarding)
+        if Forward_mux_1 = "10" then
+            ALU_IN2 <= ALU_OUT_MEM_STAGE;  -- Forward from EX/MEM
+        elsif Forward_mux_1 = "01" then
+            ALU_IN2 <= ALU_OUT_WB_STAGE;   -- Forward from MEM/WB
+        else
+            -- Default: Normal input (no forwarding, or undefined)
+            if ALU_SRC_SIG = "00" then
+                ALU_IN2 <= X"00000001";    -- Constant 1 (for INC)
+            elsif ALU_SRC_SIG = "01" then
+                ALU_IN2 <= REG_DATA2;      -- Register
+            else
+                -- Immediate mode (ALU_SRC_SIG = "10" or "11")
+                if IMM_SIG = '1' then
+                    -- Full 32-bit immediate from 2-word instruction
+                    ALU_IN2 <= IMM_BYPASS;
+                else
+                    ALU_IN2 <= IMM_DATA;   -- From ID/EX buffer
+                end if;
+            end if;
+        end if;
+
+        -- SRC_SEL outputs (for debugging/visibility)
+        if SP_OR_R1 = '1' then
+            SRC_SEL1_OUT <= SP_VALUE;
+        else
+            SRC_SEL1_OUT <= REG_DATA1;
+        end if;
+
+        if ALU_SRC_SIG = "00" then
+            SRC_SEL2_OUT <= X"00000001";
+        elsif ALU_SRC_SIG = "01" then
+            SRC_SEL2_OUT <= REG_DATA2;
+        else
+            if IMM_SIG = '1' then
+                SRC_SEL2_OUT <= X"0000" & IMM_BYPASS(31 downto 16);
+            else
+                SRC_SEL2_OUT <= IMM_DATA;
+            end if;
+        end if;
+    end process ALU_INPUT_MUX;
+
+    -- ============================================================
+    -- SEQUENTIAL PROCESS: Output Capture Only
+    -- ============================================================
     process(clk, rst)
     variable BRANCH_T_COND : std_logic;
     begin
         if rst = '1' then
-            ALU_OUT <= (others => '0');
+            -- Only reset REGISTERED signals (combinational ones don't need reset)
             OUT_PORT <= (others => '0');
             FLAG_REGISTER <= (others => '0');
             
         elsif rising_edge(clk) then
 
             -- ==========================================================
-            -- A. INPUT MUXES (Latched Muxes per your request)
+            -- BRANCH CALCULATION (needs FLAG_REGISTER which is clocked)
             -- ==========================================================
-            -- SRC 1 Selection
-            if (SP_OR_R1 = '1') then
-                SRC_SEL1_OUT <= SP_VALUE;
-            else
-                SRC_SEL1_OUT <= REG_DATA1;
-            end if;
-
-            -- SRC 2 Selection
-            if (ALU_SRC_SIG = "00") then
-                SRC_SEL2_OUT <= X"00000001"; -- Constant 1
-            elsif (ALU_SRC_SIG = "01") then
-                SRC_SEL2_OUT <= REG_DATA2;   -- Register
-            else
-                SRC_SEL2_OUT <= IMM_DATA;    -- Immediate
-            end if;
-
-            -- Forwarding Mux 1 (Registers the chosen input into ALU_IN1)
-            if (Forward_mux_0 = "00") then
-                ALU_IN1 <= SRC_SEL1_OUT; -- Use current Mux choice
-            elsif (Forward_mux_0 = "01") then
-                ALU_IN1 <= ALU_OUT_WB_STAGE;
-            else
-                ALU_IN1 <= ALU_OUT_MEM_STAGE;
-            end if;
-
-            -- Forwarding Mux 2 (Registers the chosen input into ALU_IN2)
-            if (Forward_mux_1 = "00") then
-                ALU_IN2 <= SRC_SEL2_OUT; -- Use current Mux choice
-            elsif (Forward_mux_1 = "01") then
-                ALU_IN2 <= ALU_OUT_WB_STAGE;
-            else
-                ALU_IN2 <= ALU_OUT_MEM_STAGE;
-            end if;
-
-
-            -- ==========================================================
-            -- B. OUTPUT CAPTURE
-            -- ==========================================================
-            -- Capture ALU Result (Logic result from inputs set in previous cycle)
-            ALU_OUT <= ALU_RESULT_WIRE;
-
-            -- Pass-through Control Signals
-            PC_SEL_SIG_OUT      <= PC_SEL_SIG;
-            MEM_WRT_EN_SIG_OUT  <= MEM_WRT_EN_SIG;
-            MEM_ADDR_SIG_OUT    <= MEM_ADDR_SIG;
-            MEM_WRT_DATA_SIG_OUT<= MEM_WRT_DATA_SIG;
-            WB_DATA_SIG_OUT     <= WB_DATA_SIG;
-            REG_WRT_EN_OUT      <= REG_WRT_EN;
-            SWAP_SIG_OUT        <= SWAP_SIG;
-
-            SP_OUT      <= SP_VALUE;
-            PC_INC_OUT  <= PC_INC_IN;
-            
             -- Branch Calculation
             
             if (BRANCH_T_SIG = "00") then
@@ -210,23 +229,12 @@ begin
                 BRANCH_T_COND := FLAG_REGISTER(2); -- Negative
             end if;
             
-            BRANCH_T_COND := BRANCH_T_COND AND BRANCH_SIG;
-            -- using BRANCH_T_COND to decide PC_BRANCH_OUT
-            if (PC_SEL_SIG = '1') then
-                if (BRANCH_T_COND = '1') then
-                    PC_BRANCH_OUT <= ALU_RESULT_WIRE; -- Branch Taken
-                else
-                    PC_BRANCH_OUT <= PC_INC_IN;        -- No Branch
-                end if;
-            else
-                PC_BRANCH_OUT <= PC_STACK_IN;    
-            end if;
+            -- Branch condition check (used for flag updates, not for PC_BRANCH_OUT)
+            -- PC_BRANCH_OUT is now calculated combinationally outside this process
             -- ==========================================================
             -- C. FLAG LOGIC (Read Old -> Write New)
             -- ==========================================================
-            
-            -- 1. Output the OLD flags (Available for Control Unit/Branching NOW)
-            FLAGS_OUT <= FLAG_REGISTER; 
+            -- FLAGS_OUT is now combinational (outputs FLAG_REGISTER directly) 
 
             -- 2. Update to NEW flags (Will be available NEXT cycle)
             -- Note: We generally don't update flags on Branch instructions
@@ -240,23 +248,60 @@ begin
 
 
             -- ==========================================================
-            -- D. MISC OUTPUTS
+            -- D. OUTPUT PORT (Registered)
             -- ==========================================================
-            -- Write Back Address Mux
-            if (WB_ADDR_SIG = "00") then
-                WB_ADDR <= R_SRC1_ADDR;
-            elsif (WB_ADDR_SIG = "01") then
-                WB_ADDR <= R_SRC2_ADDR;
-            else
-                WB_ADDR <= R_DST_ADDR;
-            end if;
-
-            -- Output Port
             if (OUT_EN_SIG = '1') then
-                OUT_PORT <= REG_DATA1;
+                OUT_PORT <= ALU_RESULT_WIRE;
             end if;
 
         end if;
     end process;
+
+    -- =============================================================
+    -- COMBINATIONAL OUTPUTS (No clock delay - EX/MEM register latches these)
+    -- =============================================================
+    
+    -- Branch condition based on type (COMBINATIONAL)
+    -- BRANCH_T_SIG: 00=Unconditional, 01=Zero, 10=Carry, 11=Negative
+    WITH BRANCH_T_SIG SELECT
+        branch_taken <= BRANCH_SIG AND PC_SEL_SIG AND '1' WHEN "00",  -- JMP (unconditional)
+                        BRANCH_SIG AND PC_SEL_SIG AND FLAG_REGISTER(0) WHEN "01",  -- JZ
+                        BRANCH_SIG AND PC_SEL_SIG AND FLAG_REGISTER(1) WHEN "10",  -- JC
+                        BRANCH_SIG AND PC_SEL_SIG AND FLAG_REGISTER(2) WHEN OTHERS;  -- JN
+    
+    -- ALU Output (directly from ALU, no internal register)
+    ALU_OUT <= ALU_RESULT_WIRE;
+    
+    -- Control Signal Pass-through (combinational)
+    -- PC_SEL_SIG_OUT is set only when branch is ACTUALLY taken
+    PC_SEL_SIG_OUT <= branch_taken;
+    MEM_WRT_EN_SIG_OUT <= MEM_WRT_EN_SIG;
+    MEM_ADDR_SIG_OUT <= MEM_ADDR_SIG;
+    MEM_WRT_DATA_SIG_OUT <= MEM_WRT_DATA_SIG;
+    WB_DATA_SIG_OUT <= WB_DATA_SIG;
+    REG_WRT_EN_OUT <= REG_WRT_EN;
+    SWAP_SIG_OUT <= SWAP_SIG;
+    
+    -- Flush output: when branch is taken, flush IF/ID and ID/EX
+    FLUSH_OUT <= branch_taken;
+    
+    -- Data pass-through (combinational)
+    SP_OUT <= SP_VALUE;
+    PC_INC_OUT <= PC_INC_IN;
+    
+    -- Flags output (combinational from registered FLAG_REGISTER)
+    FLAGS_OUT <= FLAG_REGISTER;
+    
+    -- Write-back Address MUX (combinational)
+    WB_ADDR <= R_SRC1_ADDR WHEN WB_ADDR_SIG = "00" ELSE
+               R_SRC2_ADDR WHEN WB_ADDR_SIG = "01" ELSE
+               R_DST_ADDR;
+
+    -- Branch target (combinational) - goes to Fetch stage via cpu.vhd
+    -- For JMP/JZ/JC/JN: target is full 32-bit immediate from 2-word instruction
+    -- For RET/RTI: target is PC_STACK_IN (from memory)
+    PC_BRANCH_OUT <= IMM_BYPASS WHEN branch_taken = '1' ELSE
+                     PC_STACK_IN WHEN PC_SEL_SIG = '0' ELSE
+                     PC_INC_IN;
 
 end Behavioral;

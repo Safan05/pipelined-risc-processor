@@ -64,17 +64,19 @@ def parse_register(reg):
             return format(num, '03b')
     raise ValueError(f"Invalid register: {reg}")
 
-def parse_immediate(imm):
-    """Parse immediate value to 16-bit binary"""
+def parse_immediate(imm, bits=16):
+    """Parse immediate value as HEXADECIMAL (all values treated as hex per TA format)"""
     imm = imm.strip().replace(',', '')
+    # Remove 0x prefix if present, then parse as hex
     if imm.startswith('0X') or imm.startswith('0x'):
-        value = int(imm, 16)
-    else:
-        value = int(imm)
+        imm = imm[2:]
+    # All values are hex
+    value = int(imm, 16)
     # Handle negative numbers (2's complement)
     if value < 0:
-        value = (1 << 16) + value
-    return format(value & 0xFFFF, '016b')
+        value = (1 << bits) + value
+    mask = (1 << bits) - 1
+    return format(value & mask, f'0{bits}b')
 
 def assemble_line(line, line_num):
     """Assemble a single line of assembly code"""
@@ -139,43 +141,44 @@ def assemble_line(line, line_num):
         words.append(instr)
         
     elif mnemonic == 'IADD':
-        # IADD Rdst, Rsrc, Imm
+        # IADD Rdst, Rsrc, Imm (full 32-bit immediate)
         rdst = parse_register(parts[1])
         rsrc = parse_register(parts[2])
-        imm = parse_immediate(parts[3])
+        imm = parse_immediate(parts[3], bits=32)  # 32-bit immediate
         instr = opcode + rsrc + rdst + '0' * 21
         words.append(instr)
-        words.append(imm + '0' * 16)  # Immediate in next word
+        words.append(imm)  # Full 32-bit immediate
         
     elif mnemonic == 'LDM':
-        # LDM Rdst, Imm
+        # LDM Rdst, Imm (full 32-bit immediate)
         rdst = parse_register(parts[1])
-        imm = parse_immediate(parts[2])
+        imm = parse_immediate(parts[2], bits=32)  # 32-bit immediate
         instr = opcode + rdst + '0' * 24
         words.append(instr)
-        words.append(imm + '0' * 16)
+        # Store full 32-bit immediate as-is
+        words.append(imm)
         
     elif mnemonic in ['LDD', 'STD']:
         # LDD Rdst, offset(Rsrc)  or  STD Rsrc, offset(Rdst)
         reg1 = parse_register(parts[1])
         # Parse offset(Rx) format
-        match = re.match(r'(\d+)\s*\(\s*(R\d)\s*\)', parts[2], re.IGNORECASE)
+        match = re.match(r'([0-9A-Fa-f]+)\s*\(\s*(R\d)\s*\)', parts[2], re.IGNORECASE)
         if match:
-            offset = parse_immediate(match.group(1))
+            offset = parse_immediate(match.group(1), bits=32)  # 32-bit offset
             reg2 = parse_register(match.group(2))
         else:
-            offset = '0' * 16
+            offset = '0' * 32
             reg2 = parse_register(parts[2])
         instr = opcode + reg1 + reg2 + '0' * 21
         words.append(instr)
-        words.append(offset + '0' * 16)
+        words.append(offset)  # Full 32-bit offset
         
     elif mnemonic in ['JZ', 'JN', 'JC', 'JMP', 'CALL']:
-        # Branch/Call with immediate address
-        imm = parse_immediate(parts[1])
+        # Branch/Call with full 32-bit address
+        imm = parse_immediate(parts[1], bits=32)  # 32-bit address
         instr = opcode + '0' * 27
         words.append(instr)
-        words.append(imm + '0' * 16)
+        words.append(imm)  # Full 32-bit address
         
     elif mnemonic == 'INT':
         # INT index (0 or 1)
@@ -186,31 +189,67 @@ def assemble_line(line, line_num):
     return words
 
 def assemble(input_file, output_file):
-    """Assemble entire file"""
+    """Assemble entire file with .ORG directive support"""
     with open(input_file, 'r') as f:
         lines = f.readlines()
     
-    machine_code = []
+    machine_code = {}  # Use dict for sparse addressing with .ORG
     address = 0
     
     for line_num, line in enumerate(lines, 1):
         try:
+            # Remove comments
+            clean_line = line.split('#')[0].split(';')[0].strip()
+            if not clean_line:
+                continue
+            
+            # Handle .ORG directive
+            if clean_line.upper().startswith('.ORG'):
+                parts = clean_line.split()
+                if len(parts) >= 2:
+                    org_addr = parts[1].strip()
+                    if org_addr.startswith('0X') or org_addr.startswith('0x'):
+                        address = int(org_addr, 16)
+                    elif any(c in org_addr.upper() for c in 'ABCDEF'):
+                        address = int(org_addr, 16)
+                    else:
+                        address = int(org_addr)
+                continue
+            
+            # Check if line is just a raw hex value (for .ORG data)
+            if re.match(r'^[0-9A-Fa-f]+$', clean_line):
+                value = int(clean_line, 16)
+                word = format(value, '032b')
+                machine_code[address] = word
+                address += 1
+                continue
+            
+            # Normal instruction
             words = assemble_line(line, line_num)
             for word in words:
-                machine_code.append((address, word))
+                machine_code[address] = word
                 address += 1
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error on line {line_num}: {e}")
             return False
+    
+    # Find max address
+    if not machine_code:
+        print("No instructions assembled")
+        return False
+    
+    max_addr = max(machine_code.keys())
     
     # Write output in hex format for memory initialization
     with open(output_file, 'w') as f:
-        for addr, word in machine_code:
-            # Convert binary to hex (32-bit word)
-            hex_val = format(int(word, 2), '08X')
+        for addr in range(max_addr + 1):
+            if addr in machine_code:
+                hex_val = format(int(machine_code[addr], 2), '08X')
+            else:
+                hex_val = '00000000'  # Fill gaps with zeros
             f.write(f"{hex_val}\n")
     
-    print(f"Assembled {len(machine_code)} words to {output_file}")
+    print(f"Assembled {len(machine_code)} words to {output_file} (max addr: {max_addr})")
     return True
 
 def main():
