@@ -1,8 +1,8 @@
-# Pipelined Processor
+<h1 align ="center"> Pipelined Processor </h1>
 
 VHDL implementation of a simple 32-bit, 5-stage pipelined processor. The design follows the following ISA : eight general-purpose registers, a program counter, stack pointer, condition flags, a unified Von Neumann memory, memory-mapped program/data loading, and interrupt/reset support.
 
-## Features
+## <img src="https://i.postimg.cc/5NL5sK0M/new-features.png" width="21" /> Features
 
 - 5-stage pipeline: Fetch, Decode, Execute, Memory, Write Back.
 - Unified 32-bit instruction/data memory with 20-bit addressing.
@@ -16,7 +16,7 @@ VHDL implementation of a simple 32-bit, 5-stage pipelined processor. The design 
 - Python assembler that emits `.mem` files accepted by the VHDL memory initializer.
 - ModelSim `.do` scripts for full CPU and focused instruction simulations.
 
-## Processor Architecture
+## <img src="https://i.postimg.cc/SQ7NVWhW/stages.png" width="21" /> Processor Architecture
 
 The top-level entity is `cpu` in [cpu.vhd](cpu.vhd). Its external interface is:
 
@@ -40,7 +40,7 @@ Pipeline stages:
 
 The pipeline buffers are implemented in `src/PipelineBuffer/` and carry both datapath values and stage-specific control signals.
 
-## ISA Summary
+## <img src="https://i.postimg.cc/WzSWz9J5/isa.png" width="21" /> ISA Summary
 
 The assembler and control unit use 5-bit opcodes in instruction bits `[31:27]`. Register fields are 3 bits wide.
 
@@ -61,7 +61,7 @@ Two-word instructions store the immediate/address/offset in the following memory
 
 The assembler treats immediates as hexadecimal values. Prefixes like `0x` are accepted but not required.
 
-## Assembler Usage
+## <img src="https://i.postimg.cc/vTXqTP6v/asm.png" width="21" /> Assembler Usage
 
 Convert assembly text into a hex memory initialization file:
 
@@ -85,7 +85,7 @@ HLT
 
 The `.ORG` directive places subsequent words/instructions at a memory address. Raw hex words can be used to initialize reset or interrupt vectors. Empty memory gaps are emitted as `00000000`.
 
-## Simulation
+## <img src="https://i.postimg.cc/x8gx8sb5/business-chart.png" width="21" /> Simulation
 
 The provided scripts are written for ModelSim/Questa.
 
@@ -101,21 +101,21 @@ do OneOperand_test.do
 
 The scripts compile the VHDL files in dependency order, load `work.cpu_tb`, add useful waveform signals, and run the simulation.
 
-## Reset, Interrupts, and Memory
+## <img src="https://i.postimg.cc/j2vg28J8/interrupt.png" width="21" /> Reset, Interrupts, and Memory
 
 - On reset, the processor starts from the reset vector stored in memory location `0`.
 - Interrupt handling uses `int_sig` and the interrupt vector path described in the project document.
 - The memory component accepts one 32-bit hex word per line.
 - The memory is modeled with synchronous write and asynchronous read for simulation.
 
-## Hazards
+## <img src="https://i.postimg.cc/Gtz7tMsJ/hazard.png" width="21" /> Hazards
 
 - Data hazards are handled with a forwarding unit that selects EX/MEM or MEM/WB results for execute-stage operands.
 - Load-use hazards are detected by `hazard_detection_unit.vhd`; the PC and IF/ID register stall while ID/EX is flushed with a bubble.
 - Taken branches generate a flush from the execute stage to clear younger instructions.
 - Stack pointer forwarding is used for back-to-back stack operations.
 
-## Contributors <img src="https://i.imgur.com/SfBB4jV.png" width="28" />
+## <img src="https://i.postimg.cc/V6h9V3Mp/group.png" width="21" /> Contributors
 
 | <a href="https://avatars.githubusercontent.com/u/149877108?s=400&v=4"><img src="https://avatars.githubusercontent.com/u/149877108?s=400&v=4" alt="Amira" width="150"></a> | <a href="https://avatars.githubusercontent.com/u/69475479?v=4"><img src="https://avatars.githubusercontent.com/u/69475479?v=4" alt="Alyaa" width="150"></a> | <a href="https://avatars.githubusercontent.com/u/153025116?v=4"><img src="https://avatars.githubusercontent.com/u/153025116?v=4" alt="Ahmed" width="150"></a> | <a href="https://avatars.githubusercontent.com/u/149018230?v=4"><img src="https://avatars.githubusercontent.com/u/149018230?v=4" alt="Safan" width="150"></a> |
 | :-----------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------------------------------------------------: |
